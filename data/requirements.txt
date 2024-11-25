@@ -1,1 +1,10 @@
-  dash plotly pandas matplotlib io PIL base64 seaborn numpy bokeh altair geopandas
+dash
+plotly
+pandas
+matplotlib
+seaborn
+numpy
+bokeh
+altair
+geopandas
+pillow
