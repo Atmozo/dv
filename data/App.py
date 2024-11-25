@@ -7,18 +7,16 @@ from PIL import Image
 import base64
 import seaborn as sns
 import numpy as np
-import bokeh.plotting as bp
-import altair as alt
-import geopandas as gpd
+import os
 
-# Initialize Dash App
+
 app = Dash(__name__)
 
-# App Layout
+
 app.layout = html.Div([
     html.H1("Intelligent Visualization App", style={'text-align': 'center'}),
-    
-    # File Upload Component
+
+
     html.Div([
         html.H4("Upload a File:"),
         dcc.Upload(
@@ -37,7 +35,7 @@ app.layout = html.Div([
             multiple=False
         ),
     ]),
-    
+
     # Graph Type Selector
     html.Div([
         html.H4("Select Graph Type:"),
@@ -57,7 +55,7 @@ app.layout = html.Div([
 
     # Graph Suggestions Section
     html.Div(id='graph-suggestions', style={'margin': '20px', 'text-align': 'center', 'color': 'red'}),
-    
+
     # Graph Output Section
     html.Div([
         html.H4("Generated Graph:"),
@@ -142,5 +140,7 @@ def live_visualization(graph_type):
         return html.Img(src=f'data:image/png;base64,{encoded_image}')
     return ""
 
+# Main Function for Deployment
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    port = int(os.environ.get('PORT', 8050))
+    app.run_server(debug=False, host='0.0.0.0', port=port)
