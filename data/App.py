@@ -1,21 +1,16 @@
-from dash import Dash, dcc, html, Input, Output, State, ctx
+from dash import Dash, dcc, html, Input, Output, State
 import pandas as pd
 import plotly.express as px
 import matplotlib.pyplot as plt
 from io import BytesIO
-from PIL import Image
 import base64
-import seaborn as sns
 import numpy as np
 import os
 
-
 app = Dash(__name__)
-
 
 app.layout = html.Div([
     html.H1("Intelligent Visualization App", style={'text-align': 'center'}),
-
 
     html.Div([
         html.H4("Upload a File:"),
@@ -56,16 +51,24 @@ app.layout = html.Div([
     # Graph Suggestions Section
     html.Div(id='graph-suggestions', style={'margin': '20px', 'text-align': 'center', 'color': 'red'}),
 
-    # Graph Output Section
+    # Graph Output Section wrapped with loading spinner
     html.Div([
         html.H4("Generated Graph:"),
-        dcc.Graph(id='output-graph'),
+        dcc.Loading(
+            id="loading-graph",
+            type="circle",  # You can change this to 'dot' or 'bars' for different loading spinner styles
+            children=dcc.Graph(id='output-graph')
+        ),
     ]),
 
-    # Live Graph Section
+    # Live Graph Section wrapped with loading spinner
     html.Div([
         html.H4("Live Graph Visualization:"),
-        html.Div(id='live-graph-output')
+        dcc.Loading(
+            id="loading-live-graph",
+            type="circle",  # You can change this to 'dot' or 'bars' for different loading spinner styles
+            children=html.Div(id='live-graph-output')
+        ),
     ])
 ])
 
