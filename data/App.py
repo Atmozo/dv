@@ -1,138 +1,146 @@
-import dash
-from dash import dcc, html, Input, Output
-import plotly.express as px
-import plotly.graph_objects as go
+from dash import Dash, dcc, html, Input, Output, State, ctx
 import pandas as pd
+import plotly.express as px
+import matplotlib.pyplot as plt
+from io import BytesIO
+from PIL import Image
+import base64
+import seaborn as sns
+import numpy as np
+import bokeh.plotting as bp
+import altair as alt
+import geopandas as gpd
 
-# Sample data
-df = pd.DataFrame({
-    'Category': ['A', 'B', 'C', 'D'],
-    'Values': [10, 20, 30, 40],
-    'Extra': [15, 25, 35, 45]
-})
+# Initialize Dash App
+app = Dash(__name__)
 
-# Initialize Dash app
-app = dash.Dash(__name__)
-
-# Layout
-app.layout = html.Div(
+# App Layout
+app.layout = html.Div([
+    html.H1("Intelligent Visualization App", style={'text-align': 'center'}),
     
-    style={'font-family': 'Arial, sans-serif', 'margin': '20px'},
-    children=[
-        html.H1("Dynamic Graph Generator ", style={'text-align': 'center', 'color': '#333'}),
-        html.H2("explore graphs that you can use as a data analisys .... ", style={'text-align': 'center', 'color': '#333'}),
-
-        html.Div(
-            style={'margin-bottom': '20px'},
-            children=[
-                html.Label("Choose a Graph Type:", style={'font-weight': 'bold'}),
-                dcc.Dropdown(
-                    id='graph-type',
-                    options=[
-                        {'label': 'Line Plot', 'value': 'line'},
-                        {'label': 'Bar Chart', 'value': 'bar'},
-                        {'label': 'Scatter Plot', 'value': 'scatter'},
-                        {'label': 'Histogram', 'value': 'histogram'},
-                        {'label': '3D Scatter Plot', 'value': '3d-scatter'},
-                        {'label': '3D Line Plot', 'value': '3d-line'},
-                        {'label': 'Pie Chart', 'value': 'pie'},
-                        {'label': 'Box Plot', 'value': 'box'},
-                        {'label': 'Heatmap', 'value': 'heatmap'},
-                        {'label': 'Bubble Chart', 'value': 'bubble'},
-                        {'label': 'Density Contour Plot', 'value': 'density-contour'},
-                        {'label': 'Area Chart', 'value': 'area'},
-                        {'label': 'Polar Chart', 'value': 'polar'},
-                        {'label': 'Funnel Chart', 'value': 'funnel'},
-                        {'label': 'Sunburst Chart', 'value': 'sunburst'},
-                        {'label': 'Treemap', 'value': 'treemap'},
-                        {'label': 'Radar Chart', 'value': 'radar'}
-                    ],
-                    placeholder="Select a graph type",
-                    style={'width': '50%'}
-                )
-            ]
+    # File Upload Component
+    html.Div([
+        html.H4("Upload a File:"),
+        dcc.Upload(
+            id='upload-data',
+            children=html.Div(['Drag and Drop or ', html.A('Select Files')]),
+            style={
+                'width': '50%',
+                'height': '60px',
+                'lineHeight': '60px',
+                'borderWidth': '1px',
+                'borderStyle': 'dashed',
+                'borderRadius': '5px',
+                'textAlign': 'center',
+                'margin': '10px auto'
+            },
+            multiple=False
         ),
-        html.Div(
-            style={'text-align': 'center', 'margin-bottom': '20px'},
-            children=[
-                html.Button("Save Generated File", id="save-btn", style={
-                    'background-color': '#4CAF50', 'color': 'white', 'padding': '10px 20px',
-                    'border': 'none', 'cursor': 'pointer', 'font-size': '16px'
-                }),
-                dcc.Download(id="download-file")
-            ]
+    ]),
+    
+    # Graph Type Selector
+    html.Div([
+        html.H4("Select Graph Type:"),
+        dcc.Dropdown(
+            id='graph-type',
+            options=[
+                {'label': 'Line Plot', 'value': 'line'},
+                {'label': 'Bar Chart', 'value': 'bar'},
+                {'label': 'Scatter Plot', 'value': 'scatter'},
+                {'label': 'Histogram', 'value': 'histogram'},
+                {'label': 'Heatmap', 'value': 'heatmap'},
+                {'label': 'Pie Chart', 'value': 'pie'}
+            ],
+            placeholder="Choose a graph type...",
         ),
-        dcc.Graph(id='graph-output', style={'border': '1px solid #ddd', 'padding': '10px'}),
-    ]
-)
+    ], style={'width': '50%', 'margin': 'auto'}),
 
-# Callback for graph rendering
+    # Graph Suggestions Section
+    html.Div(id='graph-suggestions', style={'margin': '20px', 'text-align': 'center', 'color': 'red'}),
+    
+    # Graph Output Section
+    html.Div([
+        html.H4("Generated Graph:"),
+        dcc.Graph(id='output-graph'),
+    ]),
+
+    # Live Graph Section
+    html.Div([
+        html.H4("Live Graph Visualization:"),
+        html.Div(id='live-graph-output')
+    ])
+])
+
+# Helper Function: Decode Uploaded File
+def parse_contents(contents, filename):
+    content_type, content_string = contents.split(',')
+    decoded = base64.b64decode(content_string)
+    if filename.endswith('.csv'):
+        return pd.read_csv(BytesIO(decoded))
+    elif filename.endswith('.xlsx'):
+        return pd.read_excel(BytesIO(decoded))
+    elif filename.endswith('.json'):
+        return pd.read_json(BytesIO(decoded))
+    return None
+
+# Callback for Graph Generation
 @app.callback(
-    Output('graph-output', 'figure'),
+    [Output('output-graph', 'figure'),
+     Output('graph-suggestions', 'children')],
+    Input('upload-data', 'contents'),
+    Input('graph-type', 'value'),
+    State('upload-data', 'filename')
+)
+def update_graph(contents, graph_type, filename):
+    if not contents or not graph_type:
+        return {}, ""
+
+    # Parse File
+    df = parse_contents(contents, filename)
+    if df is None:
+        return {}, "Unsupported file type. Please upload a CSV, Excel, or JSON file."
+
+    # Generate Graph
+    try:
+        if graph_type == 'line':
+            fig = px.line(df, x=df.columns[0], y=df.columns[1:])
+        elif graph_type == 'bar':
+            fig = px.bar(df, x=df.columns[0], y=df.columns[1:])
+        elif graph_type == 'scatter':
+            fig = px.scatter(df, x=df.columns[0], y=df.columns[1])
+        elif graph_type == 'histogram':
+            fig = px.histogram(df, x=df.columns[0])
+        elif graph_type == 'heatmap':
+            corr = df.corr()
+            fig = px.imshow(corr, text_auto=True, color_continuous_scale='viridis')
+        elif graph_type == 'pie':
+            fig = px.pie(df, names=df.columns[0], values=df.columns[1])
+        else:
+            fig = {}
+        return fig, ""
+    except Exception as e:
+        suggestions = f"Graph '{graph_type}' cannot be generated. Try Line Plot, Bar Chart, or Histogram."
+        return {}, suggestions
+
+# Live Graph Callback (Matplotlib Example)
+@app.callback(
+    Output('live-graph-output', 'children'),
     Input('graph-type', 'value')
 )
-def update_graph(graph_type):
-    if not graph_type:
-        return go.Figure()  # Empty figure
+def live_visualization(graph_type):
     if graph_type == 'line':
-        return px.line(df, x='Category', y='Values', title='Line Plot')
-    elif graph_type == 'bar':
-        return px.bar(df, x='Category', y='Values', title='Bar Chart')
-    elif graph_type == 'scatter':
-        return px.scatter(df, x='Category', y='Values', size='Extra', color='Category', title='Scatter Plot')
-    elif graph_type == 'histogram':
-        return px.histogram(df, x='Values', title='Histogram')
-    elif graph_type == '3d-scatter':
-        return px.scatter_3d(df, x='Category', y='Values', z='Extra', color='Category', title='3D Scatter Plot')
-    elif graph_type == '3d-line':
-        fig = go.Figure(go.Scatter3d(x=df['Category'], y=df['Values'], z=df['Extra'], mode='lines'))
-        fig.update_layout(title='3D Line Plot')
-        return fig
-    elif graph_type == 'pie':
-        return px.pie(df, names='Category', values='Values', title='Pie Chart')
-    elif graph_type == 'box':
-        return px.box(df, x='Category', y='Values', title='Box Plot')
-    elif graph_type == 'heatmap':
-        return px.density_heatmap(df, x='Category', y='Values', title='Heatmap')
-    elif graph_type == 'bubble':
-        return px.scatter(df, x='Category', y='Values', size='Extra', color='Category', title='Bubble Chart')
-    elif graph_type == 'density-contour':
-        return px.density_contour(df, x='Category', y='Values', title='Density Contour Plot')
-    elif graph_type == 'area':
-        return px.area(df, x='Category', y='Values', title='Area Chart')
-    elif graph_type == 'polar':
-        return px.line_polar(df, r='Values', theta='Category', title='Polar Chart')
-    elif graph_type == 'funnel':
-        return px.funnel(df, x='Category', y='Values', title='Funnel Chart')
-    elif graph_type == 'sunburst':
-        return px.sunburst(df, path=['Category'], values='Values', title='Sunburst Chart')
-    elif graph_type == 'treemap':
-        return px.treemap(df, path=['Category'], values='Values', title='Treemap')
-    elif graph_type == 'radar':
-        fig = go.Figure()
-        for col in df.columns[1:]:
-            fig.add_trace(go.Scatterpolar(
-                r=df[col],
-                theta=df['Category'],
-                fill='toself',
-                name=col
-            ))
-        fig.update_layout(title='Radar Chart')
-        return fig
+        x = np.linspace(0, 10, 100)
+        y = np.sin(x)
+        plt.figure()
+        plt.plot(x, y)
+        plt.title("Live Line Plot")
+        buf = BytesIO()
+        plt.savefig(buf, format='png')
+        plt.close()
+        buf.seek(0)
+        encoded_image = base64.b64encode(buf.read()).decode('utf-8')
+        return html.Img(src=f'data:image/png;base64,{encoded_image}')
+    return ""
 
-# Callback to save the current graph as an image
-@app.callback(
-    Output("download-file", "data"),
-    Input("save-btn", "n_clicks"),
-    Input('graph-type', 'value'),
-    prevent_initial_call=True
-)
-def save_graph(n_clicks, graph_type):
-    if not graph_type:
-        return None
-    fig = update_graph(graph_type)
-    return dcc.send_file(fig.to_image(format="png", engine="kaleido"))
-
-# Run app
 if __name__ == '__main__':
     app.run_server(debug=True)
