@@ -12,6 +12,7 @@ app = Dash(__name__)
 app.layout = html.Div([
     html.H1("Intelligent Visualization App", style={'text-align': 'center'}),
 
+    # File Upload Section
     html.Div([
         html.H4("Upload a File:"),
         dcc.Upload(
@@ -29,6 +30,7 @@ app.layout = html.Div([
             },
             multiple=False
         ),
+        html.Div(id='upload-status', style={'text-align': 'center', 'color': 'green', 'font-weight': 'bold', 'margin-top': '10px'})
     ]),
 
     # Graph Type Selector
@@ -47,6 +49,12 @@ app.layout = html.Div([
             placeholder="Choose a graph type...",
         ),
     ], style={'width': '50%', 'margin': 'auto'}),
+
+    # Display the uploaded file content (first 5 rows)
+    html.Div([
+        html.H4("Uploaded File Preview:"),
+        html.Div(id='file-preview', style={'text-align': 'center', 'margin-top': '20px'})
+    ]),
 
     # Graph Suggestions Section
     html.Div(id='graph-suggestions', style={'margin': '20px', 'text-align': 'center', 'color': 'red'}),
@@ -84,22 +92,41 @@ def parse_contents(contents, filename):
         return pd.read_json(BytesIO(decoded))
     return None
 
-# Callback for Graph Generation
+# Callback for Uploading File and Displaying Messages
+@app.callback(
+    Output('upload-status', 'children'),
+    Input('upload-data', 'contents'),
+    State('upload-data', 'filename')
+)
+def display_upload_status(contents, filename):
+    if contents is not None:
+        return "Uploading... Please Wait"
+    return ""
+
+# Callback for Graph Generation with Progress Messages
 @app.callback(
     [Output('output-graph', 'figure'),
-     Output('graph-suggestions', 'children')],
+     Output('graph-suggestions', 'children'),
+     Output('file-preview', 'children'),
+     Output('upload-status', 'children')],
     Input('upload-data', 'contents'),
     Input('graph-type', 'value'),
     State('upload-data', 'filename')
 )
 def update_graph(contents, graph_type, filename):
     if not contents or not graph_type:
-        return {}, ""
+        return {}, "", "", "Please upload a file and select a graph type"
+
+    # Show "Processing..." message
+    upload_status = "Processing the file..."
 
     # Parse File
     df = parse_contents(contents, filename)
     if df is None:
-        return {}, "Unsupported file type. Please upload a CSV, Excel, or JSON file."
+        return {}, "Unsupported file type. Please upload a CSV, Excel, or JSON file.", "", "Failed to process file"
+
+    # Display file preview (first 5 rows)
+    file_preview = df.head().to_html(classes='table table-bordered')
 
     # Generate Graph
     try:
@@ -118,10 +145,12 @@ def update_graph(contents, graph_type, filename):
             fig = px.pie(df, names=df.columns[0], values=df.columns[1])
         else:
             fig = {}
-        return fig, ""
+        
+        # Update the status message and graph
+        return fig, "", file_preview, "File processed successfully. Graph is ready."
     except Exception as e:
         suggestions = f"Graph '{graph_type}' cannot be generated. Try Line Plot, Bar Chart, or Histogram."
-        return {}, suggestions
+        return {}, suggestions, "", "Error generating graph"
 
 # Live Graph Callback (Matplotlib Example)
 @app.callback(
