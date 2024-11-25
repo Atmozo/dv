@@ -1,9 +1,11 @@
-from dash import Dash, dcc, html, Input, Output, State
+from dash import Dash, dcc, html, Input, Output, State, ctx
 import pandas as pd
 import plotly.express as px
 import matplotlib.pyplot as plt
 from io import BytesIO
+from PIL import Image
 import base64
+import seaborn as sns
 import numpy as np
 import os
 
@@ -30,7 +32,8 @@ app.layout = html.Div([
             },
             multiple=False
         ),
-        html.Div(id='upload-status', style={'text-align': 'center', 'color': 'green', 'font-weight': 'bold', 'margin-top': '10px'})
+        html.Div(id='file-name', style={'margin-top': '10px', 'font-weight': 'bold', 'color': 'green'}),
+        dcc.Loading(id="loading", type="circle", children=[html.Div(id="loading-message")]),
     ]),
 
     # Graph Type Selector
@@ -50,33 +53,19 @@ app.layout = html.Div([
         ),
     ], style={'width': '50%', 'margin': 'auto'}),
 
-    # Display the uploaded file content (first 5 rows)
-    html.Div([
-        html.H4("Uploaded File Preview:"),
-        html.Div(id='file-preview', style={'text-align': 'center', 'margin-top': '20px'})
-    ]),
-
     # Graph Suggestions Section
     html.Div(id='graph-suggestions', style={'margin': '20px', 'text-align': 'center', 'color': 'red'}),
 
-    # Graph Output Section wrapped with loading spinner
+    # Graph Output Section
     html.Div([
         html.H4("Generated Graph:"),
-        dcc.Loading(
-            id="loading-graph",
-            type="circle",  # You can change this to 'dot' or 'bars' for different loading spinner styles
-            children=dcc.Graph(id='output-graph')
-        ),
+        dcc.Graph(id='output-graph'),
     ]),
 
-    # Live Graph Section wrapped with loading spinner
+    # Live Graph Section
     html.Div([
         html.H4("Live Graph Visualization:"),
-        dcc.Loading(
-            id="loading-live-graph",
-            type="circle",  # You can change this to 'dot' or 'bars' for different loading spinner styles
-            children=html.Div(id='live-graph-output')
-        ),
+        html.Div(id='live-graph-output')
     ])
 ])
 
@@ -92,41 +81,37 @@ def parse_contents(contents, filename):
         return pd.read_json(BytesIO(decoded))
     return None
 
-# Callback for Uploading File and Displaying Messages
+# Callback to display the file name
 @app.callback(
-    Output('upload-status', 'children'),
+    Output('file-name', 'children'),
     Input('upload-data', 'contents'),
     State('upload-data', 'filename')
 )
-def display_upload_status(contents, filename):
-    if contents is not None:
-        return "Uploading... Please Wait"
-    return ""
+def display_file_name(contents, filename):
+    if contents:
+        return f"File Selected: {filename}"
+    return "No file selected."
 
-# Callback for Graph Generation with Progress Messages
+# Callback for Graph Generation with Loading Logic
 @app.callback(
     [Output('output-graph', 'figure'),
      Output('graph-suggestions', 'children'),
-     Output('file-preview', 'children'),
-     Output('upload-status', 'children')],
+     Output('loading-message', 'children')],
     Input('upload-data', 'contents'),
     Input('graph-type', 'value'),
     State('upload-data', 'filename')
 )
 def update_graph(contents, graph_type, filename):
     if not contents or not graph_type:
-        return {}, "", "", "Please upload a file and select a graph type"
+        return {}, "", "Select a graph type to display."
 
-    # Show "Processing..." message
-    upload_status = "Processing the file..."
+    # Show loading message
+    loading_message = "Processing your file and generating graph..."
 
     # Parse File
     df = parse_contents(contents, filename)
     if df is None:
-        return {}, "Unsupported file type. Please upload a CSV, Excel, or JSON file.", "", "Failed to process file"
-
-    # Display file preview (first 5 rows)
-    file_preview = df.head().to_html(classes='table table-bordered')
+        return {}, "Unsupported file type. Please upload a CSV, Excel, or JSON file.", ""
 
     # Generate Graph
     try:
@@ -145,12 +130,10 @@ def update_graph(contents, graph_type, filename):
             fig = px.pie(df, names=df.columns[0], values=df.columns[1])
         else:
             fig = {}
-        
-        # Update the status message and graph
-        return fig, "", file_preview, "File processed successfully. Graph is ready."
+        return fig, "", ""  # Clear loading message
     except Exception as e:
         suggestions = f"Graph '{graph_type}' cannot be generated. Try Line Plot, Bar Chart, or Histogram."
-        return {}, suggestions, "", "Error generating graph"
+        return {}, suggestions, ""
 
 # Live Graph Callback (Matplotlib Example)
 @app.callback(
@@ -171,6 +154,7 @@ def live_visualization(graph_type):
         encoded_image = base64.b64encode(buf.read()).decode('utf-8')
         return html.Img(src=f'data:image/png;base64,{encoded_image}')
     return ""
+
 
 # Main Function for Deployment
 if __name__ == '__main__':
